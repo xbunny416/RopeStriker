@@ -1,0 +1,43 @@
+name: CI
+
+# Runs the same quality gate as `./scripts/validate.sh` locally: strict type check
+# (legacy + new Luau solver) against the Roblox API definitions, Selene, StyLua,
+# the Lune test suite and a Rojo build. The built place is attached to every run.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Type check, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install toolchain (rokit.toml)
+        uses: CompeyDev/setup-rokit@v0.2.1
+        with:
+          cache: true
+
+      - name: Quality gate
+        run: ./scripts/validate.sh
+
+      - name: Upload place file
+        uses: actions/upload-artifact@v7
+        with:
+          name: ChronoRope-place
+          path: build/ChronoRope.rbxlx
+          if-no-files-found: error
+          retention-days: 14

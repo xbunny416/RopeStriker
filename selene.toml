@@ -1,0 +1,8 @@
+std = "roblox"
+exclude = ["src/ReplicatedStorage/Source/Packages/*"]
+
+[lints]
+# Strict Luau type annotations already cover these cases.
+shadowing = "allow"
+mixed_table = "deny"
+global_usage = "deny"

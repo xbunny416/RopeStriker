@@ -1,0 +1,22 @@
+# Build outputs
+/build/
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+!assets/**/*.rbxm
+!assets/**/*.rbxmx
+sourcemap.json
+
+# Tooling caches
+roblox.yml
+roblox.d.luau
+/.tooling/
+globalTypes*.d.luau
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
