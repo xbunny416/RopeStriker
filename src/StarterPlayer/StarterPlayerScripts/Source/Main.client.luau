@@ -12,6 +12,7 @@ end
 
 local Controllers = script.Parent.Controllers
 local ClientState = require(script.Parent.Modules.ClientState)
+local SoundPlayer = require(script.Parent.Modules.SoundPlayer)
 
 type Controller = {
 	Init: () -> (),
@@ -28,6 +29,7 @@ local ordered: { { Name: string, Module: Controller } } = {
 }
 
 ClientState.Start()
+task.spawn(SoundPlayer.Verify)
 
 for _, entry in ordered do
 	local ok, err = pcall(entry.Module.Init :: any)

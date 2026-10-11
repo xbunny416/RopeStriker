@@ -3,12 +3,17 @@
 	GroundTracker
 	-------------
 	Server-side observation of every character's grounded/airborne state, sampled at
-	15 Hz with downward raycasts. It is the server's independent evidence for:
+	30 Hz with downward raycasts. It is the server's independent evidence for:
 
 	  * TrainingService - each reported rope bounce must be backed by a takeoff the
 	    server actually saw (jump credits), so remote spam cannot farm KP.
 	  * CombatService   - Aerial Sweep requires being airborne and Ground Lash requires
 	    being grounded, with a short grace window to absorb replication latency.
+
+	Chained hops (jump held, or pressed on landing) touch the ground for a single physics
+	step, far shorter than the sample interval, so the grounded sample between two jumps
+	is usually never seen. A takeoff is therefore also credited when the height above the
+	ground falls and then rises again with its low point near the floor (a "valley").
 ]]
 
 local Players = game:GetService("Players")
@@ -24,11 +29,15 @@ type Track = {
 	LastAirborneAt: number,
 	LastGroundedAt: number,
 	Credits: number,
+	Descending: boolean,
+	Extreme: number, -- highest gap while rising, lowest while falling
 }
 
-local SAMPLE_INTERVAL = 1 / 15
+local SAMPLE_INTERVAL = 1 / 30
 local AIRBORNE_GAP = 1.0 -- studs above standing height => airborne
 local GROUNDED_GAP = 0.5 -- studs above standing height => grounded (hysteresis)
+local VALLEY_STEP = 0.25 -- studs past the last peak / low point that count as falling / rising
+local VALLEY_MAX_GAP = 3.5 -- a valley's low point must be this close to the ground
 local PROBE_EXTRA = 8
 
 local GroundTracker = {}
@@ -69,6 +78,8 @@ local function getTrack(player: Player): Track?
 			LastAirborneAt = -math.huge,
 			LastGroundedAt = os.clock(),
 			Credits = 0,
+			Descending = false,
+			Extreme = 0,
 		}
 		tracks[player] = created
 		track = created
@@ -80,8 +91,15 @@ local function getTrack(player: Player): Track?
 		current.Airborne = false
 		current.Credits = 0
 		current.LastGroundedAt = os.clock()
+		current.Descending = false
+		current.Extreme = 0
 	end
 	return current
+end
+
+-- A fresh takeoff the server witnessed: one rope bounce may be claimed for it.
+local function credit(track: Track)
+	track.Credits = math.min(track.Credits + 1, GameConfig.Training.JumpCreditCap)
 end
 
 function GroundTracker.SampleNow(player: Player)
@@ -97,19 +115,38 @@ function GroundTracker.SampleNow(player: Player)
 	if track.Airborne then
 		if gap <= GROUNDED_GAP then
 			track.Airborne = false
+			track.Descending = false
 			track.LastGroundedAt = now
-		else
-			track.LastAirborneAt = now
+			return
 		end
+		track.LastAirborneAt = now
+		if track.Descending then
+			track.Extreme = math.min(track.Extreme, gap)
+			if gap > track.Extreme + VALLEY_STEP then
+				-- Fell, then rose again: it touched down and took off between samples.
+				local lowPoint = track.Extreme
+				track.Descending = false
+				track.Extreme = gap
+				if lowPoint <= VALLEY_MAX_GAP then
+					track.LastGroundedAt = now
+					credit(track)
+				end
+			end
+		else
+			track.Extreme = math.max(track.Extreme, gap)
+			if gap < track.Extreme - VALLEY_STEP then
+				track.Descending = true
+				track.Extreme = gap
+			end
+		end
+	elseif gap >= AIRBORNE_GAP then
+		track.Airborne = true
+		track.Descending = false
+		track.Extreme = gap
+		track.LastAirborneAt = now
+		credit(track)
 	else
-		if gap >= AIRBORNE_GAP then
-			track.Airborne = true
-			track.LastAirborneAt = now
-			-- A fresh takeoff the server witnessed: one rope bounce may be claimed for it.
-			track.Credits = math.min(track.Credits + 1, GameConfig.Training.JumpCreditCap)
-		else
-			track.LastGroundedAt = now
-		end
+		track.LastGroundedAt = now
 	end
 end
 

@@ -48,7 +48,6 @@ type BounceResult = Remotes.BounceResult
 type TrainingState = {
 	Combo: number,
 	LastLandTime: number, -- server time of the last accepted landing
-	LastAcceptedAt: number, -- os.clock() of the last accepted bounce
 	Engaged: boolean,
 	EngagedUntil: number,
 	LastBankAt: number,
@@ -75,7 +74,6 @@ local function getState(player: Player): TrainingState
 		local created: TrainingState = {
 			Combo = RhythmConfig.ComboStart,
 			LastLandTime = -math.huge,
-			LastAcceptedAt = -math.huge,
 			Engaged = false,
 			EngagedUntil = 0,
 			LastBankAt = -math.huge,
@@ -169,7 +167,9 @@ local function onReportBounce(player: Player, rawPress: unknown, rawLand: unknow
 		reject(player, state, "Timing")
 		return
 	end
-	if os.clock() - state.LastAcceptedAt < Training.MinBounceInterval then
+	-- Spacing is judged on the reported (synchronised) timestamps, not on arrival times,
+	-- so network jitter bunching two honest reports together cannot reject one.
+	if landTime - state.LastLandTime < Training.MinBounceInterval then
 		reject(player, state, "TooFast")
 		return
 	end
@@ -190,7 +190,6 @@ local function onReportBounce(player: Player, rawPress: unknown, rawLand: unknow
 
 	-- 5. Authoritative judgement + reward.
 	state.LastLandTime = landTime
-	state.LastAcceptedAt = os.clock()
 	state.Engaged = true
 	state.EngagedUntil = os.clock() + RhythmConfig.EngagedTimeout
 

@@ -256,6 +256,66 @@ return function(t)
 			expect(DataService.GetData(player).UnbankedKP).toBe(0)
 		end)
 
+		-- Chained hops (jump held, or pressed on landing) touch the ground for one physics
+		-- step, so the server's samples never see the character grounded between jumps.
+		local function chainedHop(env, player, root, ground: Vector3, report: boolean?)
+			local pressTime = env.Workspace.ServerTime
+			root.Position = ground + Vector3.new(0, 2, 0)
+			env.advance(0.1)
+			root.Position = ground + Vector3.new(0, 6, 0)
+			env.advance(0.2)
+			root.Position = ground + Vector3.new(0, 2, 0)
+			env.advance(0.1)
+			root.Position = ground + Vector3.new(0, 0.8, 0) -- lowest sample, never <= 0.5
+			env.advance(0.05)
+			local landTime = env.Workspace.ServerTime
+			if report ~= false then
+				env.Remotes.ReportBounce.OnServerEvent:Fire(player, pressTime, landTime)
+			end
+			return pressTime, landTime
+		end
+
+		it("credits chained hops whose ground contact falls between samples", function()
+			local env, _, _, player, root = setup()
+			local ground = root.Position
+			for hop = 1, 5 do
+				chainedHop(env, player, root, ground)
+				local result = env.Remotes.BounceResult:Last().Args[1]
+				expect(`{hop}: {result.Accepted} {result.Reason}`).toBe(`{hop}: true nil`)
+			end
+			local Security = env.Loader:require("src/ServerScriptService/Source/Modules/Security.luau")
+			expect(Security.StrikeCount(player)).toBe(0)
+		end)
+
+		it("does not credit a takeoff for small wobbles while standing", function()
+			local env, _, _, player, root = setup()
+			local ground = root.Position
+			for _ = 1, 6 do
+				root.Position = ground + Vector3.new(0, 0.4, 0)
+				env.advance(0.05)
+				root.Position = ground
+				env.advance(0.05)
+			end
+			local now = env.Workspace.ServerTime
+			env.Remotes.ReportBounce.OnServerEvent:Fire(player, now - 0.5, now)
+			expect(env.Remotes.BounceResult:Last().Args[1].Reason).toBe("Unverified")
+		end)
+
+		it("judges bounce spacing on reported timestamps, not arrival times", function()
+			local env, _, _, player, root = setup()
+			local ground = root.Position
+			-- Two honest hops whose reports arrive bunched together (network jitter).
+			local press1, land1 = chainedHop(env, player, root, ground, false)
+			local press2, land2 = chainedHop(env, player, root, ground, false)
+			env.Remotes.ReportBounce.OnServerEvent:Fire(player, press1, land1)
+			expect(env.Remotes.BounceResult:Last().Args[1].Accepted).toBe(true)
+			env.Remotes.ReportBounce.OnServerEvent:Fire(player, press2, land2)
+			expect(env.Remotes.BounceResult:Last().Args[1].Accepted).toBe(true)
+			-- A landing claimed too soon after the previous one is still refused.
+			env.Remotes.ReportBounce.OnServerEvent:Fire(player, land2, land2 + 0.2)
+			expect(env.Remotes.BounceResult:Last().Args[1].Reason).toBe("TooFast")
+		end)
+
 		it("stops at Stamina Capacity and drops the stance after a pause", function()
 			local env, DataService, _, player, root = setup()
 			DataService.Mutate(player, { "UnbankedKP" }, function(data)
@@ -354,9 +414,46 @@ return function(t)
 			expect(#damageLog).toBe(2) -- radial: hits in front and behind
 		end)
 
-		it("rejects aim that does not match the character's facing", function()
+		it("tolerates network jitter but never a faster sustained rate", function()
 			local env, _, player, _, damageLog = setup()
-			attack(env, player, "GroundLash", Vector3.new(0, 0, -1), { 1 })
+			local cooldown = GameConfig.Combat.Attacks.GroundLash.Cooldown
+			-- Sent one cooldown apart; the second packet is delayed, the third is not.
+			attack(env, player, "GroundLash", Vector3.new(0, 0, 1), { 1 })
+			env.advance(cooldown + 0.13)
+			attack(env, player, "GroundLash", Vector3.new(0, 0, 1), { 1 })
+			env.advance(cooldown - 0.13)
+			attack(env, player, "GroundLash", Vector3.new(0, 0, 1), { 1 })
+			expect(#damageLog).toBe(3)
+
+			-- A client firing every 0.25 s for 3 s only gets the cooldown's rate.
+			local spamEnv, _, spamPlayer, _, spamLog = setup()
+			local duration = 3
+			for _ = 1, 13 do
+				attack(spamEnv, spamPlayer, "GroundLash", Vector3.new(0, 0, 1), { 1 })
+				spamEnv.advance(0.25)
+			end
+			local allowed = math.floor((duration + GameConfig.Combat.CooldownJitterSeconds) / cooldown) + 1
+			expect(#spamLog <= allowed).toBe(true)
+			expect(#spamLog >= math.floor(duration / cooldown)).toBe(true)
+		end)
+
+		it("waits for the server's view of the character to turn towards the aim", function()
+			local env, _, player, root, damageLog = setup()
+			-- The client already turned to face -Z; the server still sees it facing +Z.
+			attack(env, player, "GroundLash", Vector3.new(0, 0, -1), { 3 })
+			expect(#damageLog).toBe(0)
+			root.CFrame = CFrame.new(root.Position) -- replication catches up: now facing -Z
+			env.advance(0.1)
+			expect(#damageLog).toBe(1)
+			expect(damageLog[1].MobId).toBe(3)
+			local Security = env.Loader:require("src/ServerScriptService/Source/Modules/Security.luau")
+			expect(Security.StrikeCount(player)).toBe(0)
+		end)
+
+		it("drops aim that never matches the character's facing", function()
+			local env, _, player, _, damageLog = setup()
+			attack(env, player, "GroundLash", Vector3.new(0, 0, -1), { 1, 3 })
+			env.advance(0.6)
 			expect(#damageLog).toBe(0)
 		end)
 

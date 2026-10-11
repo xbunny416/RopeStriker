@@ -10,8 +10,13 @@
 
 	Positional sounds use InverseTapered roll-off up to the configured
 	RollOffMaxDistance so far-away whip cracks fade out naturally.
+
+	SoundPlayer.Verify() (run once at startup) preloads every configured id. An id that
+	fails to load is replaced by its first working fallback, or muted, with one warning,
+	instead of erroring on every playback.
 ]]
 
+local ContentProvider = game:GetService("ContentProvider")
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
@@ -22,14 +27,79 @@ local MAX_LIFETIME = 6
 
 local SoundPlayer = {}
 
+local resolved: { [string]: string } = {} -- key -> id in use ("" = muted)
+local loadResults: { [string]: boolean } = {}
+
+-- The id `key` plays with: the configured one until Verify picks otherwise.
+function SoundPlayer.GetSoundId(key: string): string
+	local id = resolved[key]
+	if id then
+		return id
+	end
+	local config = GameConfig.Sounds[key]
+	return if config then config.SoundId else ""
+end
+
+local function loads(soundId: string): boolean
+	local cached = loadResults[soundId]
+	if cached ~= nil then
+		return cached
+	end
+	local failed = false
+	local probe = Instance.new("Sound")
+	probe.SoundId = soundId
+	local ok = pcall(function()
+		ContentProvider:PreloadAsync({ probe }, function(_contentId: string, status: Enum.AssetFetchStatus)
+			-- Only an explicit failure counts; anything else keeps the sound.
+			if status == Enum.AssetFetchStatus.Failure then
+				failed = true
+			end
+		end)
+	end)
+	probe:Destroy()
+	local result = ok and not failed
+	loadResults[soundId] = result
+	return result
+end
+
+-- Yields while preloading; call it from its own thread.
+function SoundPlayer.Verify()
+	for key, config in GameConfig.Sounds do
+		if config.SoundId == "" then
+			continue
+		end
+		local candidates: { string } = { config.SoundId }
+		local fallbacks = config.Fallbacks
+		if fallbacks then
+			for _, fallback in fallbacks do
+				table.insert(candidates, fallback)
+			end
+		end
+		local chosen = ""
+		for _, candidate in candidates do
+			if loads(candidate) then
+				chosen = candidate
+				break
+			end
+		end
+		resolved[key] = chosen
+		if chosen == "" then
+			warn(`[SoundPlayer] {key}: {config.SoundId} failed to load and has no working fallback; muted`)
+		elseif chosen ~= config.SoundId then
+			warn(`[SoundPlayer] {key}: {config.SoundId} failed to load; using {chosen}`)
+		end
+	end
+end
+
 local function create(key: string, playbackSpeed: number?, volume: number?): Sound?
 	local config = GameConfig.Sounds[key]
-	if config == nil or config.SoundId == "" then
+	local soundId = SoundPlayer.GetSoundId(key)
+	if config == nil or soundId == "" then
 		return nil
 	end
 	local sound = Instance.new("Sound")
 	sound.Name = key
-	sound.SoundId = config.SoundId
+	sound.SoundId = soundId
 	sound.Volume = config.Volume * (volume or 1)
 	sound.PlaybackSpeed = playbackSpeed or 1
 	sound.RollOffMode = Enum.RollOffMode.InverseTapered

@@ -235,6 +235,8 @@ export type SoundData = {
 	SoundId: string,
 	Volume: number,
 	RollOffMaxDistance: number,
+	-- Tried in order when SoundId fails to load (see SoundPlayer.Verify).
+	Fallbacks: { string }?,
 }
 
 export type RateLimitData = {
@@ -917,7 +919,7 @@ local Training = {
 	MaxAirtime = 3,
 	MaxReportAge = 2.5, -- landing timestamp may be at most this old on arrival
 	MaxFutureSkew = 0.3, -- or this far in the future (clock sync jitter)
-	MinBounceInterval = 0.3,
+	MinBounceInterval = 0.3, -- reported landings at least this far apart
 	JumpCreditCap = 3, -- server-observed takeoffs that can be banked ahead of reports
 	-- Epoch Obelisk banking
 	ObeliskPromptDistance = 14,
@@ -931,7 +933,7 @@ local Combat = {
 	MaxTargetsPerAttack = 8,
 	AngleToleranceDegrees = 15, -- extra server slack on cone checks (latency)
 	HeightTolerance = 12,
-	CooldownTolerance = 0.85, -- accept attacks that arrive up to 15% early (jitter)
+	CooldownJitterSeconds = 0.2, -- attacks may arrive this much early (network jitter); the sustained rate may not
 	AirborneGraceSeconds = 0.35,
 	Attacks = {
 		GroundLash = {
@@ -1034,14 +1036,29 @@ local Animations = {
 	MobTelegraphSlash = "",
 }
 
--- Sound ids. The rbxasset:// paths ship with every Roblox client and act as
--- placeholders until the final Rope_Whoosh / Whip_Crack / Obelisk_Bank assets are uploaded.
+-- Sound ids. The rbxasset:// paths are built-in client sounds used as placeholders until
+-- the final Rope_Whoosh / Whip_Crack / Obelisk_Bank assets are uploaded. Roblox retires old
+-- built-in files from time to time, so each placeholder lists fallbacks.
+local PING = "rbxasset://sounds/electronicpingshort.wav"
+local PING_FALLBACKS = { "rbxasset://sounds/electronicpingshort.mp3" }
+
 local Sounds: { [string]: SoundData } = {
-	RopeWhoosh = { SoundId = "rbxasset://sounds/swoosh.wav", Volume = 0.45, RollOffMaxDistance = 60 },
-	WhipCrack = { SoundId = "rbxasset://sounds/swordslash.wav", Volume = 0.8, RollOffMaxDistance = 120 },
-	ObeliskBank = { SoundId = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.9, RollOffMaxDistance = 140 },
-	RhythmHit = { SoundId = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.25, RollOffMaxDistance = 40 },
-	Hatch = { SoundId = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.7, RollOffMaxDistance = 80 },
+	RopeWhoosh = {
+		SoundId = "rbxasset://sounds/swordlunge.mp3",
+		Volume = 0.45,
+		RollOffMaxDistance = 60,
+		-- action_jump ships with the default character sounds, so it always exists.
+		Fallbacks = { "rbxasset://sounds/swordslash.mp3", "rbxasset://sounds/action_jump.mp3" },
+	},
+	WhipCrack = {
+		SoundId = "rbxasset://sounds/swordslash.wav",
+		Volume = 0.8,
+		RollOffMaxDistance = 120,
+		Fallbacks = { "rbxasset://sounds/swordslash.mp3", "rbxasset://sounds/action_jump_land.mp3" },
+	},
+	ObeliskBank = { SoundId = PING, Volume = 0.9, RollOffMaxDistance = 140, Fallbacks = PING_FALLBACKS },
+	RhythmHit = { SoundId = PING, Volume = 0.25, RollOffMaxDistance = 40, Fallbacks = PING_FALLBACKS },
+	Hatch = { SoundId = PING, Volume = 0.7, RollOffMaxDistance = 80, Fallbacks = PING_FALLBACKS },
 }
 
 ---------------------------------------------------------------------------------------

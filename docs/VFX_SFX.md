@@ -50,11 +50,15 @@ numbers (gold "KO!" on kills); KP pop-ups above the gauge; hatch reveal card; re
 
 | Event | Config key | Behaviour | Placeholder |
 | --- | --- | --- | --- |
-| **Rope_Whoosh** | `Sounds.RopeWhoosh` | Every rope jump and swing, on the player's root (falloff 60 studs). `PlaybackSpeed = 2^(semitones/12)` with +1 semitone per tier above Kinetic (`Rhythm.SemitonesPerTier`) → 1.000 / 1.059 / 1.122 / 1.189 | `rbxasset://sounds/swoosh.wav` |
-| **Whip_Crack** | `Sounds.WhipCrack` | On confirmed hits, at the first hit position with InverseTapered falloff (min 8, max 120 studs); other players hear it via `AttackFx` | `rbxasset://sounds/swordslash.wav` |
-| **Obelisk_Bank** | `Sounds.ObeliskBank` | When KP is deposited; also (pitched) on rift unlocks and rebirths | `rbxasset://sounds/electronicpingshort.wav` |
+| **Rope_Whoosh** | `Sounds.RopeWhoosh` | Every rope jump and swing, on the player's root (falloff 60 studs). `PlaybackSpeed = 2^(semitones/12)` with +1 semitone per tier above Kinetic (`Rhythm.SemitonesPerTier`) → 1.000 / 1.059 / 1.122 / 1.189 | `rbxasset://sounds/swordlunge.mp3` → `swordslash.mp3` → `action_jump.mp3` |
+| **Whip_Crack** | `Sounds.WhipCrack` | On confirmed hits, at the first hit position with InverseTapered falloff (min 8, max 120 studs); other players hear it via `AttackFx` | `rbxasset://sounds/swordslash.wav` → `swordslash.mp3` → `action_jump_land.mp3` |
+| **Obelisk_Bank** | `Sounds.ObeliskBank` | When KP is deposited; also (pitched) on rift unlocks and rebirths | `rbxasset://sounds/electronicpingshort.wav` → `.mp3` |
 | Rhythm hit | `Sounds.RhythmHit` | Soft tick on on-beat bounces, pitched like the whoosh | same as above |
 | Hatch | `Sounds.Hatch` | Egg reveal | same as above |
+
+Placeholders are built-in client sounds, which Roblox retires from time to time, so each
+entry lists `Fallbacks`. At startup `SoundPlayer.Verify` preloads every id and switches to
+the first fallback that loads (or mutes the sound), with one warning in the Output.
 
 ### Delivery specs for the final audio
 * **Rope_Whoosh:** crisp airy swish, 0.25–0.35 s, energy around 1–4 kHz, tail ≤ 0.15 s,

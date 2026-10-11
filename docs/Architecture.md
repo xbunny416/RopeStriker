@@ -61,8 +61,8 @@ Defined once in `Network/Definitions.luau`; the `RemoteEvents` folder holds one
 
 | Remote | Dir | Payload | Server-side validation |
 | --- | --- | --- | --- |
-| `ReportBounce` | C→S | `pressTime, landTime` | rate limit 6 burst / 3 per s; finite numbers; airtime 0.12–3 s; landing ≤ 2.5 s old and ≤ 0.3 s in the future; no overlap with the previous bounce; ≥ 0.3 s apart; Training zone only; **a takeoff witnessed by GroundTracker**; re-judged on the server clock |
-| `RequestAttack` | C→S | `attack, direction, targetIds` | rate limit 6 / 4 per s; known attack kind; finite non-zero direction; ≤ 8 unique integer ids; per-attack cooldown (15% jitter allowance); Aerial Sweep needs recent airborne state, Ground Lash recent ground contact; cone aim within 80° of the character's facing; each target alive, **≤ 16 studs** (edge distance) and inside the volume + tolerance |
+| `ReportBounce` | C→S | `pressTime, landTime` | rate limit 6 burst / 3 per s; finite numbers; airtime 0.12–3 s; landing ≤ 2.5 s old and ≤ 0.3 s in the future; no overlap with the previous bounce; reported landings ≥ 0.3 s apart (judged on the timestamps, so jitter cannot bunch honest reports); Training zone only; **a takeoff witnessed by GroundTracker**; re-judged on the server clock |
+| `RequestAttack` | C→S | `attack, direction, targetIds` | rate limit 6 / 4 per s; known attack kind; finite non-zero direction; ≤ 8 unique integer ids; per-attack cooldown booked GCRA-style (may arrive 0.2 s early for jitter, never faster on average); Aerial Sweep needs recent airborne state, Ground Lash recent ground contact; cone aim within 80° of the character's facing, waiting up to 0.35 s for the server's lagging view of a turning character to catch up; each target alive, **≤ 16 studs** (edge distance) and inside the volume + tolerance |
 | `PurchaseItem`, `EquipItem` | C→S fn | `category, itemId` | rate limit; category whitelist; string ≤ 64; all rules in `PlayerDataOps` (price, era, ownership) |
 | `SetPetEquipped` | C→S fn | `uid | "*best", equipped` | rate limit; types; ownership & slot count |
 | `RequestRebirth` | C→S fn | — | rate limit; 3 s cooldown; Era 4 + 1M Strength from stored data |
@@ -80,7 +80,7 @@ handlers** with an extra distance check — there is no remote to spoof.
 | --- | --- |
 | Remote spam | Token-bucket `RateLimiter` per player per remote family |
 | Malformed payloads (NaN, huge tables, wrong types) | `Shared/Guard` on every argument; failures add Security strikes |
-| Free KP without jumping | `GroundTracker` raycasts every character at 15 Hz; each bounce consumes one *witnessed takeoff* credit |
+| Free KP without jumping | `GroundTracker` raycasts every character at 30 Hz; each bounce consumes one *witnessed takeoff* credit. Chained hops touch the ground for a single physics step, so a fall-then-rise with its low point near the floor also counts as a takeoff |
 | Perfect-timing spoofing | Timestamps must be physically plausible and recent; combo authority stays on the server; gains are capped by Stamina Capacity and banking requires being at an obelisk |
 | Kill-aura / long-range hits | ≤ 16-stud edge-distance check, cone/radius re-test, facing check, max 8 targets, per-attack cooldowns |
 | Air/ground attack spoofing | GroundTracker airborne/grounded history with a 0.35 s grace window |

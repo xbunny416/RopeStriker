@@ -93,7 +93,7 @@ scripts/validate.sh                    the full quality gate
    Roblox API definitions and the Rojo sourcemap — under both the legacy and the new
    Luau type solver.
 2. **Lint** with Selene (Roblox std) and **format check** with StyLua.
-3. **119 tests** under Lune: the economy, rhythm, payout, mutation and mob-AI modules
+3. **127 tests** under Lune: the economy, rhythm, payout, mutation and mob-AI modules
    run unmodified through a Roblox-shaped module loader; DataService, TrainingService
    and CombatService run end-to-end against a mocked engine (players, raycasts, clocks,
    remotes, ProfileService) to exercise the anti-exploit paths; the procedural world is
