@@ -1,5 +1,7 @@
 # ChronoRope: Epoch Striker
 
+[![CI](https://github.com/xbunny416/RopeStriker/actions/workflows/ci.yml/badge.svg)](https://github.com/xbunny416/RopeStriker/actions/workflows/ci.yml)
+
 A hybrid **incremental simulator / action RPG** for Roblox. Jump rope on the beat to
 charge Kinetic Power, bank it at the Epoch Obelisk to grow permanent Strength, lash
 shared-health gladiators in the Grand Colosseum for Shards, gear up, hatch chrono-pets,
@@ -97,6 +99,10 @@ scripts/validate.sh                    the full quality gate
    remotes, ProfileService) to exercise the anti-exploit paths; the procedural world is
    built against Lune's reflection-checked instance model.
 4. **Place build** with Rojo.
+
+The same gate runs in GitHub Actions (`.github/workflows/ci.yml`) on every pull request
+and every push to `main`, with the toolchain installed from `rokit.toml`; each run
+attaches the built `ChronoRope.rbxlx` as a downloadable artifact.
 
 ## Architecture in one minute
 

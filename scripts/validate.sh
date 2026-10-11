@@ -10,8 +10,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TOOLING=.tooling
-DEFS="$TOOLING/globalTypes.None.d.luau"
-DEFS_URL="https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/scripts/globalTypes.None.d.luau"
+# Roblox API type definitions pinned to the luau-lsp release in rokit.toml, so a
+# definitions update can never change the result of an existing commit.
+LUAU_LSP_VERSION=$(sed -nE 's/^luau-lsp *= *"[^@]+@([^"]+)".*/\1/p' rokit.toml)
+DEFS="$TOOLING/globalTypes.None.$LUAU_LSP_VERSION.d.luau"
+DEFS_URL="https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/$LUAU_LSP_VERSION/scripts/globalTypes.None.d.luau"
 mkdir -p "$TOOLING"
 
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$1"; }
@@ -20,7 +23,7 @@ step "Rojo sourcemap"
 rojo sourcemap default.project.json --include-non-scripts -o sourcemap.json
 
 if [ ! -s "$DEFS" ]; then
-	step "Downloading Roblox type definitions"
+	step "Downloading Roblox type definitions (luau-lsp $LUAU_LSP_VERSION)"
 	curl -fsSL "$DEFS_URL" -o "$DEFS"
 fi
 
